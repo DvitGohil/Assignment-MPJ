@@ -105,7 +105,6 @@ public class lab3 {
         c.findArea(side);
         c.findArea(r, true);
 
-
         System.out.println("\n=== Tourist Places ===");
 
         TouristSpot t;
