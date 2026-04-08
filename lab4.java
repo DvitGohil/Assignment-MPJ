@@ -1,116 +1,240 @@
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.Scanner;
+import java.io.*;
+import java.util.*;
 
-// Custom Exception for low deposit
-class LowDepositException extends Exception {
-    public LowDepositException(String message) {
-        super(message);
+// Custom Exceptions
+class InvalidCIDException extends Exception {
+    InvalidCIDException(String msg) {
+        super(msg);
     }
 }
 
-class BankSystem {
+class InvalidAmountException extends Exception {
+    InvalidAmountException(String msg) {
+        super(msg);
+    }
+}
 
-    Scanner input = new Scanner(System.in);
+class LowBalanceException extends Exception {
+    LowBalanceException(String msg) {
+        super(msg);
+    }
+}
 
-    // Method to open a new account
-    public void openAccount() {
-        try {
-            System.out.print("Enter Account Number (100-999): ");
-            int accNo = input.nextInt();
+class Bank {
 
-            if (accNo < 100 || accNo > 999) {
-                throw new Exception("Account number must be between 100 and 999");
+    Scanner sc = new Scanner(System.in);
+    File file = new File("accounts.txt");
+
+    // Check account existence
+    boolean accountExists(int cid) {
+        if (!file.exists())
+            return false;
+
+        try (Scanner fr = new Scanner(file)) {
+            while (fr.hasNext()) {
+                int id = fr.nextInt();
+                fr.next();
+                fr.nextDouble();
+
+                if (id == cid)
+                    return true;
             }
-
-            System.out.print("Enter Account Holder Name: ");
-            String name = input.next();
-
-            System.out.print("Enter Initial Deposit: ");
-            double deposit = input.nextDouble();
-
-            if (deposit < 500) {
-                throw new LowDepositException("Minimum deposit required is 500");
-            }
-
-            FileWriter writer = new FileWriter("accounts.txt", true);
-            writer.write(accNo + " " + name + " " + deposit + "\n");
-            writer.close();
-
-            System.out.println("Account successfully opened!");
-
-        } catch (LowDepositException e) {
-            System.out.println("Deposit Error: " + e.getMessage());
-        } catch (IOException e) {
-            System.out.println("File Error occurred.");
         } catch (Exception e) {
-            System.out.println("Input Error: " + e.getMessage());
+            System.out.println("File Read Error");
+        }
+        return false;
+    }
+
+    // Create Account
+    void createAccount() {
+        try {
+            System.out.print("Enter CID (1–20): ");
+            int cid = sc.nextInt();
+
+            if (cid < 1 || cid > 20)
+                throw new InvalidCIDException("CID must be between 1 and 20");
+
+            if (accountExists(cid))
+                throw new Exception("Account already exists!");
+
+            System.out.print("Enter Name: ");
+            String name = sc.next();
+
+            System.out.print("Enter Amount: ");
+            double amount = sc.nextDouble();
+
+            if (amount <= 0)
+                throw new InvalidAmountException("Amount must be positive");
+
+            if (amount < 1000)
+                throw new LowBalanceException("Minimum balance is Rs.1000");
+
+            try (FileWriter fw = new FileWriter(file, true)) {
+                fw.write(cid + " " + name + " " + amount + "\n");
+            }
+
+            System.out.println("Account Created Successfully!");
+
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
         }
     }
 
-    // Method to withdraw money
-    public void withdrawMoney() {
+    // Deposit
+    void deposit() {
         try {
-            System.out.print("Enter Current Balance: ");
-            double balance = input.nextDouble();
+            System.out.print("Enter CID: ");
+            int cid = sc.nextInt();
 
-            System.out.print("Enter Amount to Withdraw: ");
-            double amount = input.nextDouble();
+            if (!accountExists(cid))
+                throw new Exception("Account not found!");
 
-            if (amount <= 0) {
-                throw new Exception("Withdrawal amount must be positive");
+            System.out.print("Enter Deposit Amount: ");
+            double dep = sc.nextDouble();
+
+            if (dep <= 0)
+                throw new InvalidAmountException("Amount must be positive");
+
+            File tempFile = new File("temp.txt");
+
+            try (Scanner fr = new Scanner(file);
+                 FileWriter fw = new FileWriter(tempFile)) {
+
+                while (fr.hasNext()) {
+                    int id = fr.nextInt();
+                    String name = fr.next();
+                    double balance = fr.nextDouble();
+
+                    if (id == cid) {
+                        balance += dep;
+                        System.out.println("Deposit Successful!");
+                        System.out.println("Updated Balance: " + balance);
+                    }
+
+                    fw.write(id + " " + name + " " + balance + "\n");
+                }
             }
 
-            if (amount > balance) {
-                throw new Exception("Not enough balance");
-            }
-
-            balance -= amount;
-            System.out.println("Withdrawal successful.");
-            System.out.println("Updated Balance: " + balance);
+            file.delete();
+            tempFile.renameTo(file);
 
         } catch (Exception e) {
-            System.out.println("Transaction Error: " + e.getMessage());
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+
+    // Withdraw
+    void withdraw() {
+        try {
+            System.out.print("Enter CID: ");
+            int cid = sc.nextInt();
+
+            if (!accountExists(cid))
+                throw new Exception("Account not found!");
+
+            System.out.print("Enter Withdrawal Amount: ");
+            double amt = sc.nextDouble();
+
+            if (amt <= 0)
+                throw new InvalidAmountException("Amount must be positive");
+
+            File tempFile = new File("temp.txt");
+
+            try (Scanner fr = new Scanner(file);
+                 FileWriter fw = new FileWriter(tempFile)) {
+
+                while (fr.hasNext()) {
+                    int id = fr.nextInt();
+                    String name = fr.next();
+                    double balance = fr.nextDouble();
+
+                    if (id == cid) {
+                        if (amt > balance)
+                            throw new LowBalanceException("Insufficient Balance");
+
+                        balance -= amt;
+
+                        System.out.println("Withdrawal Successful!");
+                        System.out.println("Remaining Balance: " + balance);
+                    }
+
+                    fw.write(id + " " + name + " " + balance + "\n");
+                }
+            }
+
+            file.delete();
+            tempFile.renameTo(file);
+
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+
+    // Display All Accounts
+    void display() {
+        if (!file.exists()) {
+            System.out.println("No records found!");
+            return;
+        }
+
+        try (Scanner fr = new Scanner(file)) {
+            System.out.println("\nCID\tName\tBalance");
+            System.out.println("-------------------------");
+
+            while (fr.hasNext()) {
+                int id = fr.nextInt();
+                String name = fr.next();
+                double balance = fr.nextDouble();
+
+                System.out.println(id + "\t" + name + "\t" + balance);
+            }
+
+        } catch (Exception e) {
+            System.out.println("Error reading file");
         }
     }
 }
 
-public class lab4 {
+public class  lab4 {
 
     public static void main(String[] args) {
 
         Scanner sc = new Scanner(System.in);
-        BankSystem bank = new BankSystem();
-
-        int option;
+        Bank bank = new Bank();
+        int choice;
 
         do {
-            System.out.println("\n====== SIMPLE BANK SYSTEM ======");
-            System.out.println("1. Open New Account");
-            System.out.println("2. Withdraw Money");
-            System.out.println("3. Exit");
+            System.out.println("\n===== BANK MENU =====");
+            System.out.println("1. Create Account");
+            System.out.println("2. Deposit");
+            System.out.println("3. Withdraw");
+            System.out.println("4. Display All");
+            System.out.println("5. Exit");
 
-            System.out.print("Select option: ");
-            option = sc.nextInt();
+            System.out.print("Enter choice: ");
+            choice = sc.nextInt();
 
-            switch (option) {
+            switch (choice) {
                 case 1:
-                    bank.openAccount();
+                    bank.createAccount();
                     break;
-
                 case 2:
-                    bank.withdrawMoney();
+                    bank.deposit();
                     break;
-
                 case 3:
-                    System.out.println("Program closed.");
+                    bank.withdraw();
                     break;
-
+                case 4:
+                    bank.display();
+                    break;
+                case 5:
+                    System.out.println("Thank You!");
+                    break;
                 default:
-                    System.out.println("Invalid option selected.");
+                    System.out.println("Invalid Choice");
             }
 
-        } while (option != 3);
+        } while (choice != 5);
 
         sc.close();
     }
